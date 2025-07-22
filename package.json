@@ -13,13 +13,21 @@
   "keywords": [
     "chatbot",
     "koishi",
-    "plugin"
+    "plugin",
+    "game",
+    "meme",
+    "life"
   ],
   "devDependencies": {},
   "peerDependencies": {
     "koishi": "^4.18.7"
   },
-   "dependencies": {
+  "dependencies": {
     "dayjs": "^1.11.11"
+  },
+  "koishi": {
+    "service": {
+      "required": ["database-sqlite"]
+    }
   }
 }

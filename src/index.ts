@@ -157,7 +157,7 @@ export function apply(ctx: Context, config: Config) {
 
   // match匹配
   ctx.command('对对碰匹配', '参与牛子对对碰比赛，下注积分')
-    .option('bet', '-下注 <points:number> 下注积分')
+    .option('bet', '-b <points:number> 下注积分')
     .action(async ({ session, options }) => {
       const userId = session.userId;
       let [user] = await ctx.database.get('users', { userId });
@@ -178,7 +178,7 @@ export function apply(ctx: Context, config: Config) {
       const { bet } = options;
 
       if (typeof bet !== 'number' || bet <= 0) {
-        return '请输入有效的下注积分 (大于0的数字)。例如：对对碰匹配 -下注 1';
+        return '请输入有效的下注积分 (大于0的数字)。例如：对对碰匹配 -b 1';
       }
 
       const totalCost = bet + DEPOSIT;
@@ -229,8 +229,8 @@ export function apply(ctx: Context, config: Config) {
         };
         pendingGames.set(opponentId, game);
 
-        opponentLobbyData.session.send(`匹配成功！你将与 ${session.username} 对战。请在${LOBBY_TIMEOUT_MS / 1000}秒内输入 "start" 命令开始游戏。`);
-        session.send(`匹配成功！你将与 ${opponentLobbyData.session.username} 对战。等待对方输入 "start" 命令开始游戏。`);
+        opponentLobbyData.session.send(`匹配成功！你将与 ${session.username} 对战。请在${LOBBY_TIMEOUT_MS / 1000}秒内输入 "开始对对碰" 命令开始游戏。`);
+        session.send(`匹配成功！你将与 ${opponentLobbyData.session.username} 对战。等待对方输入 "开始对对碰" 命令开始游戏。`);
 
         return '匹配成功，等待对方开始游戏。';
 
@@ -249,7 +249,7 @@ export function apply(ctx: Context, config: Config) {
       }
     });
 
-  ctx.command('start', '开始牛子对对碰比赛')
+  ctx.command('开始对对碰', '开始牛子对对碰比赛')
     .action(async ({ session }) => {
       const userId = session.userId;
 
@@ -278,7 +278,7 @@ export function apply(ctx: Context, config: Config) {
     });
 
   // 查询积分命令
-  ctx.command('query', '查询自己的积分和等级信息')
+  ctx.command('查询积分', '查询自己的积分和等级信息')
     .action(async ({ session }) => {
       const userId = session.userId;
       const [user] = await ctx.database.get('users', { userId }); // 获取用户数据
@@ -296,7 +296,7 @@ export function apply(ctx: Context, config: Config) {
     });
 
   // 积分榜单命令
-  ctx.command('rank', '查询积分排行榜')
+  ctx.command('榜单', '查询积分排行榜')
     .action(async ({ session }) => {
       // 从数据库获取所有用户，并按积分降序排序
       // 修改前
