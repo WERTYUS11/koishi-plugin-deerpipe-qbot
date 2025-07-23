@@ -8,6 +8,10 @@ export interface Config {
   isDevelopment: boolean
 }
 
+export const inject = {
+  required: ['database']
+}
+
 export const Config: Schema<Config> = Schema.object({
   specialDates: Schema.array(Schema.string()).default([
     '07-08', '07-21', '09-01',
