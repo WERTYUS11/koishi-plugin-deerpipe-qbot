@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-deerpipe-qbot",
   "description": "炉管新插件，支持大乱斗！",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -27,7 +27,9 @@
   },
   "koishi": {
     "service": {
-      "required": ["database-sqlite"]
+      "required": [
+        "database-sqlite"
+      ]
     }
   }
 }
