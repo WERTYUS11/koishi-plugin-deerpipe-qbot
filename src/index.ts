@@ -1,4 +1,4 @@
-import { Context, Schema, Session, Model } from 'koishi' // 引入 Model 类型
+import { Context, Schema, Session, Model } from 'koishi'
 import dayjs from 'dayjs'
 
 export const name = 'deerpipe-qbot'
@@ -9,7 +9,7 @@ export interface Config {
 }
 
 export const inject = {
-  required: ['database']
+  required: ['database'] // 声明插件依赖 database 服务
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -27,7 +27,7 @@ declare module 'koishi' {
 
 export interface UserData {
   userId: string;
-  username: string;
+  username: string; // 确保这里是 string
   lastCheckIn: string | null;
   points: number;
   lv: number;
@@ -56,23 +56,19 @@ interface ActiveGame extends PendingGame {
   intervalId: NodeJS.Timeout;
 }
 
-// 战况播报说是
 export function apply(ctx: Context, config: Config) {
   // 定义 'users' 表的 schema。Koishi 会根据这个定义自动创建或更新表结构。
   ctx.model.extend('users', {
     userId: 'string', // 主键
-    username: 'string',
-    lastCheckIn: 'string',
+    username: 'string', // 用户名，不允许为空（唯一性由注册逻辑保证）
+    lastCheckIn: 'string', // 存储日期字符串 'MM-DD'
     points: 'integer',
     lv: 'integer',
     experience: 'integer',
     streak: 'integer',
   }, {
-    primary: 'userId',
+    primary: 'userId', // 声明 userId 为主键
   })
-
-  // 内存中的 Map 可以移除，因为数据将从数据库中读取和写入
-  // const userData: Map<string, UserData> = new Map();
 
   const matchingLobby: Map<string, LobbyPlayer> = new Map();
   const pendingGames: Map<string, PendingGame> = new Map();
@@ -90,11 +86,83 @@ export function apply(ctx: Context, config: Config) {
   if (config.isDevelopment) {
     // 开发模式下生成随机用户，并将其写入数据库
     const randomUserId = generateRandomUserId();
-    const randomUserData: UserData = { ...generateRandomUserData(), userId: randomUserId }; // 确保包含 userId
+    // 确保开发模式生成的随机用户也有一个初始的 username
+    const randomUserData: UserData = { ...generateRandomUserData(), userId: randomUserId, username: `随机用户${Math.floor(Math.random() * 100000)}` }; // 确保随机用户名足够随机，避免冲突
     ctx.database.create('users', randomUserData)
       .then(() => console.log(`开发模式：已生成随机用户 ${randomUserId}，等级 ${randomUserData.lv}，用户名 ${randomUserData.username}`))
       .catch(err => console.error(`开发模式：生成随机用户失败: ${err}`));
   }
+
+  // 新增总指令
+  ctx.command('牛子对对碰', '牛子对对碰游戏指令集')
+    .action(() => {
+      return `✨ 牛子对对碰游戏指令集 ✨
+
+以下是你可以使用的指令：
+
+- 注册 <用户名>：首次游玩请先注册你的专属用户名。
+  例如：注册 otto
+  ------------------------------------------
+- 炉管打卡：每日打卡获取积分和经验。
+  ------------------------------------------
+- 对对碰匹配 -b <积分>：发起或加入牛子对对碰比赛，需下注积分。
+  例如：对对碰匹配 -b 100
+  ------------------------------------------
+- 开始对对碰：在匹配成功后，由发起方输入此指令开始比赛。
+  ------------------------------------------
+- 查询积分：查看你的当前积分、等级、经验和连续打卡天数。
+  ------------------------------------------
+- 积分榜单：查看积分排行榜。
+
+祝你玩得开心！
+`;
+    });
+
+  // 新增注册指令
+  ctx.command('注册 <username:string>', '注册你的游戏用户名')
+    .action(async ({ session }, username) => {
+      const userId = session.userId;
+
+      if (!username || username.trim() === '') {
+        return '请输入一个有效的用户名。';
+      }
+
+      if (username.length > 15 || username.length < 2) {
+        return '用户名长度需在2到15个字符之间。';
+      }
+
+      // 检查新用户名是否已被其他用户占用
+      const [existingUserWithSameName] = await ctx.database.get('users', { username: username });
+      if (existingUserWithSameName && existingUserWithSameName.userId !== userId) {
+        return `用户名“${username}”已被占用，请尝试其他用户名。`;
+      }
+
+      let [user] = await ctx.database.get('users', { userId });
+
+      if (user) {
+        // 用户已存在
+        if (user.username === username) {
+          return `你已经注册过用户名：${user.username}，无需重复注册。`;
+        } else {
+          // 用户已存在，且尝试注册新用户名（可能是修改）
+          await ctx.database.set('users', { userId }, { username: username });
+          return `你的用户名已更新为：${username}。`;
+        }
+      } else {
+        // 用户不存在，创建新记录
+        await ctx.database.create('users', {
+          userId,
+          username: username, // 使用用户提供的用户名
+          lastCheckIn: null,
+          points: 0,
+          lv: 0,
+          experience: 0,
+          streak: 0,
+        });
+        return `恭喜你，${username}！你已成功注册牛子对对碰。`;
+      }
+    });
+
 
   // 打卡
   ctx.command('炉管打卡', '打卡并获得积分')
@@ -106,15 +174,18 @@ export function apply(ctx: Context, config: Config) {
 
       if (!user) {
         // 如果用户数据不存在，初始化并插入数据
+        // 此时使用 session.username 作为默认用户名，用户后续可以通过“注册”命令修改
         user = await ctx.database.create('users', {
           userId,
-          username: session.username,
+          username: session.username, // 默认使用会话用户名
           lastCheckIn: null,
           points: 0,
           lv: 0,
           experience: 0,
           streak: 0,
         });
+        return `你尚未注册用户名，已为你创建临时账号（用户名：${session.username}）。请使用“注册 <用户名>”设置你的专属用户名。` +
+               `\n首次打卡不获得积分，请先注册！`; // 首次打卡不给积分，引导注册
       }
 
       const today = dayjs().format('MM-DD');
@@ -126,12 +197,14 @@ export function apply(ctx: Context, config: Config) {
       }
 
       const pointsGained = Math.floor(Math.random() * 15) + 1;
-      // 注意：这里 lvGain 的计算和 user.lv 的直接增加可能需要调整，
-      // 通常等级是根据经验值计算得出的，而不是直接增加
-      // 但为了保持原逻辑，这里先这样处理
-      const lvGain = Math.floor(user.experience / 20); // 每20经验升一级
-      user.lv += lvGain; // 增加等级
       user.experience += 20; // 增加经验
+
+      // 判断是否升级，如果当前经验达到或超过下一级所需经验
+      const requiredExpForNextLv = (user.lv + 1) * 20;
+      if (user.experience >= requiredExpForNextLv) {
+        user.lv += 1;
+        session.send(`恭喜你，${user.username}！你的等级提升到 Lv.${user.lv}！`);
+      }
 
       user.streak += 1;
       if (user.streak % 7 === 0) {
@@ -167,22 +240,14 @@ export function apply(ctx: Context, config: Config) {
       let [user] = await ctx.database.get('users', { userId });
 
       if (!user) {
-        // 如果用户数据不存在，初始化并插入数据
-        user = await ctx.database.create('users', {
-          userId,
-          username: session.username,
-          lastCheckIn: null,
-          points: 0,
-          lv: 0,
-          experience: 0,
-          streak: 0
-        });
+        // 如果用户数据不存在，引导注册
+        return '你尚未注册牛子对对碰账号，请先使用“注册 <用户名>”命令进行注册。';
       }
 
       const { bet } = options;
 
       if (typeof bet !== 'number' || bet <= 0) {
-        return '请输入有效的下注积分 (大于0的数字)。例如：对对碰匹配 -b 1';
+        return '请输入有效的下注积分 (大于0的数字)。例如：对对碰匹配 -b 100';
       }
 
       const totalCost = bet + DEPOSIT;
@@ -214,6 +279,7 @@ export function apply(ctx: Context, config: Config) {
         clearTimeout(opponentLobbyData.timeoutId);
         matchingLobby.delete(opponentId);
 
+        // 重新获取最新的玩家数据，确保等级计算准确
         const [player1Data] = await ctx.database.get('users', { userId: opponentId })!;
         const [player2Data] = await ctx.database.get('users', { userId })!;
 
@@ -233,8 +299,9 @@ export function apply(ctx: Context, config: Config) {
         };
         pendingGames.set(opponentId, game);
 
-        opponentLobbyData.session.send(`匹配成功！你将与 ${session.username} 对战。请在${LOBBY_TIMEOUT_MS / 1000}秒内输入 "开始对对碰" 命令开始游戏。`);
-        session.send(`匹配成功！你将与 ${opponentLobbyData.session.username} 对战。等待对方输入 "开始对对碰" 命令开始游戏。`);
+        // 使用数据库中的用户名进行提示
+        opponentLobbyData.session.send(`匹配成功！你将与 ${player2Data.username} 对战。请在${LOBBY_TIMEOUT_MS / 1000}秒内输入 "开始对对碰" 命令开始游戏。`);
+        session.send(`匹配成功！你将与 ${player1Data.username} 对战。等待对方输入 "开始对对碰" 命令开始游戏。`);
 
         return '匹配成功，等待对方开始游戏。';
 
@@ -249,7 +316,7 @@ export function apply(ctx: Context, config: Config) {
         }, LOBBY_TIMEOUT_MS);
 
         matchingLobby.set(userId, { bet: bet, session: session, timeoutId: timeoutId });
-        return `你已进入牛子对对碰匹配大厅，等待其他玩家加入（${LOBBY_TIMEOUT_MS}秒内）。已扣除 ${bet} 积分和 ${DEPOSIT} 押金。当前积分：${user.points}`;
+        return `你已进入牛子对对碰匹配大厅，等待其他玩家加入（${LOBBY_TIMEOUT_MS / 1000}秒内）。已扣除 ${bet} 积分和 ${DEPOSIT} 押金。当前积分：${user.points}`;
       }
     });
 
@@ -300,10 +367,9 @@ export function apply(ctx: Context, config: Config) {
     });
 
   // 积分榜单命令
-  ctx.command('榜单', '查询积分排行榜')
+  ctx.command('积分榜单', '查询积分排行榜')
     .action(async ({ session }) => {
       // 从数据库获取所有用户，并按积分降序排序
-      // 修改前
       const allUsers = await ctx.database.select('users').orderBy('points', 'desc').execute();
 
       if (allUsers.length === 0) {
@@ -343,6 +409,7 @@ export function apply(ctx: Context, config: Config) {
   async function sendBattleLog(game: ActiveGame) {
     game.logCount++;
 
+    // 重新从数据库获取最新的玩家数据，确保播报的等级和名称是最新的
     const [winnerUserData] = await ctx.database.get('users', { userId: game.winnerId })!;
     const [loserUserData] = await ctx.database.get('users', { userId: game.winnerId === game.player1Id ? game.player2Id : game.player1Id })!;
 
@@ -390,10 +457,10 @@ export function apply(ctx: Context, config: Config) {
   }
 
   // 生成随机用户数据（等级1-5）
-  function generateRandomUserData(): Omit<UserData, 'userId'> { // 返回不包含 userId 的数据，因为 userId 会在创建时生成
+  // 注意：这个函数不再生成 username，因为 username 将由注册命令或 session.username 提供
+  function generateRandomUserData(): Omit<UserData, 'userId' | 'username'> {
     const lv = Math.floor(Math.random() * 5) + 1;
     return {
-      username: `随机用户${Math.floor(Math.random() * 1000)}`,
       lastCheckIn: null,
       points: Math.floor(Math.random() * 100) + 10,
       lv: lv,
