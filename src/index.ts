@@ -74,7 +74,7 @@ export function apply(ctx: Context, config: Config) {
   const pendingGames: Map<string, PendingGame> = new Map();
   const activeGames: Map<string, ActiveGame> = new Map();
 
-  const DEPOSIT = 5;
+  const DEPOSIT = 2;
   const LOBBY_TIMEOUT_MS = 60 * 1000;
   const BATTLE_LOG_INTERVAL_MS = 2 * 1000;
   const BATTLE_LOG_COUNT = 5;
@@ -196,8 +196,8 @@ export function apply(ctx: Context, config: Config) {
         return '今天你已经打过卡了！';
       }
 
-      const pointsGained = Math.floor(Math.random() * 15) + 1;
-      user.experience += 20; // 增加经验
+      const pointsGained = Math.floor(Math.random() * 25) + 1;
+      user.experience += 10; // 增加经验
 
       // 判断是否升级，如果当前经验达到或超过下一级所需经验
       const requiredExpForNextLv = (user.lv + 1) * 20;
